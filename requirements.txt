@@ -1,0 +1,9 @@
+streamlit
+python-dotenv
+supabase
+openai
+langchain
+langchain-community
+langchain-core
+langchain-openai
+pypdf
