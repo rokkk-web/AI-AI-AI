@@ -39,24 +39,46 @@ PASSWORD_ITERATIONS = 260_000
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
+def _writable_log_dir() -> Path | None:
+    """Return a writable log directory, or None on read-only hosts (e.g. Streamlit Cloud)."""
+    candidates = [
+        LOG_DIR,
+        Path(tempfile.gettempdir()) / "multi_user_rag_logs",
+    ]
+    for directory in candidates:
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            probe = directory / ".write_probe"
+            probe.write_text("", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            return directory
+        except OSError:
+            continue
+    return None
+
+
 def _setup_logging() -> logging.Logger:
     """Configure warning/error logging for the app."""
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
-    log_path = LOG_DIR / f"multi_user_rag_{datetime.now().strftime('%Y%m%d')}.log"
-
     root = logging.getLogger()
     root.handlers.clear()
     root.setLevel(logging.WARNING)
 
     fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-    fh = logging.FileHandler(log_path, encoding="utf-8")
-    fh.setLevel(logging.WARNING)
-    fh.setFormatter(fmt)
     ch = logging.StreamHandler()
     ch.setLevel(logging.WARNING)
     ch.setFormatter(fmt)
-    root.addHandler(fh)
     root.addHandler(ch)
+
+    log_dir = _writable_log_dir()
+    if log_dir is not None:
+        log_path = log_dir / f"multi_user_rag_{datetime.now().strftime('%Y%m%d')}.log"
+        try:
+            fh = logging.FileHandler(log_path, encoding="utf-8")
+            fh.setLevel(logging.WARNING)
+            fh.setFormatter(fmt)
+            root.addHandler(fh)
+        except OSError:
+            pass
 
     for name in ("httpx", "httpcore", "openai", "langchain", "supabase"):
         logging.getLogger(name).setLevel(logging.WARNING)
